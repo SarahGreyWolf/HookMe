@@ -61,7 +61,7 @@ pub struct EmbedField {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Discord {
+pub struct DiscordWebhook {
     wait: bool,
     content: String,
     username: String,
@@ -70,7 +70,7 @@ pub struct Discord {
     embeds: Vec<EmbedData>
 }
 
-impl Embed for Discord {
+impl Embed for DiscordWebhook {
     fn get_username(&self) -> String {
         self.username.clone()
     }
