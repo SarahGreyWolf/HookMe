@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub trait Embed {
     fn get_username(&self) -> String;
@@ -14,18 +14,25 @@ pub struct Destination {
     pub(crate) server_id: u64,
     pub(crate) channel_id: u64,
     pub(crate) user_id: u64,
-    pub(crate) app_id: u64
+    pub(crate) app_id: u64,
 }
 
 impl Destination {
-    pub fn new(username: &str, avatar_url: &str, server_id: u64, channel_id: u64, user_id: u64, app_id: u64) -> Destination {
+    pub fn new(
+        username: &str,
+        avatar_url: &str,
+        server_id: u64,
+        channel_id: u64,
+        user_id: u64,
+        app_id: u64,
+    ) -> Destination {
         Destination {
             username: username.into(),
             avatar_url: avatar_url.into(),
             server_id,
             channel_id,
             user_id,
-            app_id
+            app_id,
         }
     }
 }
@@ -38,26 +45,26 @@ pub struct EmbedData {
     pub(crate) color: u32,
     pub(crate) footer: EmbedFooter,
     pub(crate) author: EmbedAuthor,
-    pub(crate) fields: Option<Vec<EmbedField>>
+    pub(crate) fields: Option<Vec<EmbedField>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmbedFooter {
-    pub(crate) text: String
+    pub(crate) text: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmbedAuthor {
     pub(crate) name: String,
     pub(crate) url: String,
-    pub(crate) icon_url: String
+    pub(crate) icon_url: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmbedField {
     pub(crate) name: String,
     pub(crate) value: String,
-    pub(crate) inline: Option<bool>
+    pub(crate) inline: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -67,7 +74,7 @@ pub struct DiscordWebhook {
     username: String,
     avatar_url: String,
     tts: bool,
-    embeds: Vec<EmbedData>
+    embeds: Vec<EmbedData>,
 }
 
 impl Embed for DiscordWebhook {
