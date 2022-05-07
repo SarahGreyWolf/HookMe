@@ -4,14 +4,13 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{verify};
 use body_type::{Destination, Embed, EmbedData};
 use mongodb::{
     bson::doc, bson::oid::ObjectId, bson::Bson, options::ClientOptions, Client, Database,
 };
 use serde::{Deserialize, Serialize};
 use serenity::framework::standard::StandardFramework;
-use serenity::model::user::User;
 use serenity::prelude::*;
 use serenity::Client as DS_Client;
 use std::{error::Error, sync::Arc};
