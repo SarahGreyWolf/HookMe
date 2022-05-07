@@ -18,7 +18,7 @@ use serenity::framework::standard::StandardFramework;
 use serenity::model::user::User;
 use serenity::prelude::*;
 use serenity::Client as DS_Client;
-use std::net::SocketAddr;
+use std::{net::{SocketAddr, IpAddr}, str::FromStr};
 use std::{error::Error, sync::Arc};
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::RwLock;
@@ -107,13 +107,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .layer(Extension(db))
             .into_inner(),
     );
-    let addr = SocketAddr::from(([192, 168, 0, 14], 80));
+    let address = std::env::var("LOCAL_IP").expect("Could not find local ip in environment");
+    let port = std::env::var("PORT").expect("Could not find port in environment");
+    let addr = SocketAddr::from((IpAddr::from_str(&address).unwrap(), port.parse().unwrap()));
     println!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
-
     Ok(())
 }
 

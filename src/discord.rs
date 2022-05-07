@@ -1,18 +1,16 @@
-use crate::body_type::{Destination, Embed, EmbedData};
-use crate::{UserCollection, UserRef, AppCollection};
+use crate::body_type::{Destination, EmbedData};
+use crate::{UserCollection, AppCollection};
 use mongodb::{
     bson::oid::ObjectId,
-    bson::{doc, Document, Bson},
-    options::ClientOptions,
+    bson::{doc, Bson},
     Database,
 };
-use serenity::{async_trait, model::{id::{RoleId, GuildId}, guild::{Guild, GuildContainer}}};
+use serenity::{async_trait, model::id::RoleId};
 use serenity::client::{Context, EventHandler};
 use serenity::model::{channel::Message, gateway::Ready, id::ChannelId};
 use serenity::{builder::CreateMessage, model::user::User, prelude::*};
-use std::error::Error;
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{Receiver};
 use tokio::sync::RwLock;
 use yyid::*;
 use bcrypt::{DEFAULT_COST, hash, verify};
@@ -165,9 +163,14 @@ async fn request(prefix: &char, db: &Database, parameters: Vec<&str>, ctx: &Cont
             .expect("Failed to send message");
         return;
     }
+    let channel = if let Ok(id) = std::env::var("HOOK_CHANNEL_ID") {
+        id.parse().unwrap()
+    } else {
+        msg.channel_id.0
+    };
     if let Some(app) = parameters.get(0) {
         let app_id: u32 = rand::random();
-        insert_new_app(db, user, app_id, app, guild_id.0, msg.channel_id.0).await;
+        insert_new_app(db, user, app_id, app, guild_id.0, channel).await;
         user.direct_message(&ctx.http, |m| {
             m.content(format!("Request Submitted for {}", app))
         }).await.expect("Failed to tell user about submitted request");
@@ -213,7 +216,16 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
         return;
     }
     if let Some(app_id) = parameters.get(0) {
-        let (user, app) = get_app_and_user(db, app_id.parse().unwrap()).await.unwrap();
+        let id: u32 = if let Ok(id) = app_id.parse() {
+            id
+        } else {
+            msg.channel_id
+                .say(&ctx.http, "There was an error in that request")
+                .await
+                .expect("Failed to send message");
+            return;
+        };
+        let (user, app) = get_app_and_user(db, id).await.unwrap();
         if app.approved == Bson::Boolean(true) {
             return;
         }
@@ -260,16 +272,25 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
     }
     if let Some(app_id) = parameters.get(0) {
         let app_coll = db.collection::<AppCollection>("application");
+        let app_id: u32 = if let Ok(id) = app_id.parse() {
+            id
+        } else {
+            msg.channel_id
+                .say(&ctx.http, "There was an error in that request")
+                .await
+                .expect("Failed to send message");
+            return;
+        };
         if let Ok(found) = app_coll
             .find_one(
-                doc! {"app_id": app_id.parse::<u32>().unwrap(), "approved": Bson::Boolean(true)},
+                doc! {"app_id": app_id},
                 None,
             )
             .await {
             if let Some(_) = found {
-                if let Some((user, app)) = get_app_and_user(&db, app_id.parse().unwrap()).await {
+                if let Some((user, app)) = get_app_and_user(&db, app_id).await {
                     let app_name = app.app_name;
-                    if app_coll.delete_one(doc! {"app_id": app_id, "approved": Bson::Boolean(true)}, None).await.is_ok() {
+                    if app_coll.delete_one(doc! {"app_id": app_id}, None).await.is_ok() {
                         let mut destination = msg.channel_id;
                         if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
                             if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
@@ -299,19 +320,29 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                             .await
                             .expect("Failed to send message");
                         }
-                    }
-                    if let Ok(end_user) = &ctx.http.get_user(user.id).await {
-                        if app.approved.as_bool().unwrap() {
-                            end_user.direct_message(&ctx.http, |m| {
-                                m.content(format!("Your app {app_name}'s token has been revoked"))
-                            }).await.expect("Failed to DM user");
+                        if let Ok(end_user) = &ctx.http.get_user(user.id).await {
+                            if app.approved.as_bool().unwrap() {
+                                end_user.direct_message(&ctx.http, |m| {
+                                    m.content(format!("Your app {app_name}'s token has been revoked"))
+                                }).await.expect("Failed to DM user");
+                            } else {
+                                end_user.direct_message(&ctx.http, |m| {
+                                    m.content(format!("Your app {app_name}'s request has been denied"))
+                                }).await.expect("Failed to DM user");
+                            }
                         } else {
-                            end_user.direct_message(&ctx.http, |m| {
-                                m.content(format!("Your app {app_name}'s request has been denied"))
-                            }).await.expect("Failed to DM user");
+                            panic!("Failed to get owner for app {}", app_id);
                         }
                     } else {
-                        panic!("Failed to get owner for app {}", app_id);
+                        msg.channel_id
+                            .say(
+                                &ctx.http,
+                                format!(
+                                    "Failed to revoke/decline access",
+                                ),
+                            )
+                            .await
+                            .expect("Failed to send message");
                     }
                 }
             }
@@ -355,10 +386,10 @@ async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, gu
     true
 }
 
-async fn get_app_and_user(db: &Database, app_id: u64) -> Option<(UserCollection, AppCollection)> {
+async fn get_app_and_user(db: &Database, app_id: u32) -> Option<(UserCollection, AppCollection)> {
     let app_coll = db.collection::<AppCollection>("application");
     let user_coll = db.collection::<UserCollection>("user");
-    if let Some(app) = app_coll.find_one(doc!{"app_id": app_id as i64}, None).await.expect("Failed to find app") {
+    if let Some(app) = app_coll.find_one(doc!{"app_id": app_id}, None).await.expect("Failed to find app") {
         let user_id = app.owner.id;
         if let Some(user) = user_coll.find_one(doc!{"_id": user_id}, None).await.expect("Failed to find user") {
             return Some((user, app));
