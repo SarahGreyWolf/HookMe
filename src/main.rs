@@ -39,7 +39,7 @@ pub struct UserCollection {
     username: String
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserRef {
     // #[serde(rename(deserialize="$ref"))]
     reference: String,
@@ -47,7 +47,7 @@ pub struct UserRef {
     id: ObjectId
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppCollection {
     _id: ObjectId,
     app_id: u64,

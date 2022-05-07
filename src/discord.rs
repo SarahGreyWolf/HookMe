@@ -54,7 +54,6 @@ impl EventHandler for Handler {
         match command {
             "request" => request(&self.prefix, &self.db, parameters, &ctx, &msg).await,
             "approve" => approve(&self.db, parameters, &ctx, &msg).await,
-            "decline" => decline().await,
             "revoke" => revoke(&self.db, parameters, &ctx, &msg).await,
             "help" => help(&self.prefix, &ctx, &msg).await,
             _ => {}
@@ -245,9 +244,6 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
     }
 }
 
-/// Decline a request
-async fn decline() {}
-
 /// Revoke an app_id and token
 async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Message) {
     let user = &msg.author;
@@ -263,7 +259,63 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
         return;
     }
     if let Some(app_id) = parameters.get(0) {
-        
+        let app_coll = db.collection::<AppCollection>("application");
+        if let Ok(found) = app_coll
+            .find_one(
+                doc! {"app_id": app_id.parse::<u32>().unwrap(), "approved": Bson::Boolean(true)},
+                None,
+            )
+            .await {
+            if let Some(_) = found {
+                if let Some((user, app)) = get_app_and_user(&db, app_id.parse().unwrap()).await {
+                    let app_name = app.app_name;
+                    if app_coll.delete_one(doc! {"app_id": app_id, "approved": Bson::Boolean(true)}, None).await.is_ok() {
+                        let mut destination = msg.channel_id;
+                        if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
+                            if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
+                                destination = channel.id();
+                            }
+                        }
+                        if app.approved.as_bool().unwrap() {
+                            let username = user.username;
+                            destination
+                                .say(
+                                    &ctx.http,
+                                    format!(
+                                        "{username}s app {app_name}'s access token has been revoked",
+                                    ),
+                                )
+                                .await
+                                .expect("Failed to send message");
+                        } else {
+                            let username = user.username;
+                            destination
+                            .say(
+                                &ctx.http,
+                                format!(
+                                    "{username}s app {app_name}'s request has been declined",
+                                ),
+                            )
+                            .await
+                            .expect("Failed to send message");
+                        }
+                    }
+                    if let Ok(end_user) = &ctx.http.get_user(user.id).await {
+                        if app.approved.as_bool().unwrap() {
+                            end_user.direct_message(&ctx.http, |m| {
+                                m.content(format!("Your app {app_name}'s token has been revoked"))
+                            }).await.expect("Failed to DM user");
+                        } else {
+                            end_user.direct_message(&ctx.http, |m| {
+                                m.content(format!("Your app {app_name}'s request has been denied"))
+                            }).await.expect("Failed to DM user");
+                        }
+                    } else {
+                        panic!("Failed to get owner for app {}", app_id);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -277,7 +329,8 @@ async fn help(prefix: &char, ctx: &Context, msg: &Message) {
                 .author(|a| a.name(&bot_user.name).icon_url(&bot_user.avatar_url().unwrap()))
                 .fields(vec![
                     (format!("{prefix}request <app name>"), "Request webhook access for an app", false),
-                    (format!("{prefix}approve <app id>"), "Approve the request for webhook access", false)
+                    (format!("{prefix}approve <app id>"), "Approve the request for webhook access", false),
+                    (format!("{prefix}revoke <app id>"), "Revoke or Decline access", false)
                 ])
         })
     }).await.unwrap();
@@ -302,18 +355,20 @@ async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, gu
     true
 }
 
-async fn get_app_and_user(db: &Database, app_id: u64) -> Result<(UserCollection, AppCollection), Box<dyn Error>> {
+async fn get_app_and_user(db: &Database, app_id: u64) -> Option<(UserCollection, AppCollection)> {
     let app_coll = db.collection::<AppCollection>("application");
     let user_coll = db.collection::<UserCollection>("user");
-    if let Some(app) = app_coll.find_one(doc!{"app_id": app_id as i64}, None).await? {
+    if let Some(app) = app_coll.find_one(doc!{"app_id": app_id as i64}, None).await.expect("Failed to find app") {
         let user_id = app.owner.id;
-        if let Some(user) = user_coll.find_one(doc!{"_id": user_id}, None).await? {
-            return Ok((user, app));
+        if let Some(user) = user_coll.find_one(doc!{"_id": user_id}, None).await.expect("Failed to find user") {
+            return Some((user, app));
         } else {
-            return Err(Box::<dyn Error + Send + Sync>::from("Failed to find user"));
+            eprintln!("Failed to find user");
+            return None;
         }
     } else {
-        return Err(Box::<dyn Error + Send + Sync>::from("Failed to find application"));
+        eprintln!("Failed to find application");
+        return None;
     }
 }
 
