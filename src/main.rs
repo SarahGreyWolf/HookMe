@@ -4,28 +4,26 @@ use axum::{
     routing::post,
     Json, Router,
 };
+use bcrypt::{hash, verify, DEFAULT_COST};
 use body_type::{Destination, Embed, EmbedData};
 use mongodb::{
-    bson::oid::ObjectId,
-    bson::Bson,
-    bson::{doc},
-    options::ClientOptions,
-    Client,
-    Database
+    bson::doc, bson::oid::ObjectId, bson::Bson, options::ClientOptions, Client, Database,
 };
 use serde::{Deserialize, Serialize};
 use serenity::framework::standard::StandardFramework;
 use serenity::model::user::User;
 use serenity::prelude::*;
 use serenity::Client as DS_Client;
-use std::{net::{SocketAddr, IpAddr}, str::FromStr};
 use std::{error::Error, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
-use bcrypt::{DEFAULT_COST, hash, verify};
 
-use discord::{Handler};
+use discord::Handler;
 
 mod body_type;
 mod discord;
@@ -36,7 +34,7 @@ type SendEmbed = Arc<RwLock<Sender<(Destination, EmbedData)>>>;
 pub struct UserCollection {
     _id: ObjectId,
     id: u64,
-    username: String
+    username: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -44,7 +42,7 @@ pub struct UserRef {
     // #[serde(rename(deserialize="$ref"))]
     reference: String,
     // #[serde(rename(deserialize="$id"))]
-    id: ObjectId
+    id: ObjectId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -67,7 +65,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::env::var("MONGO_USERNAME").expect("Could not get mongo username in environment");
     let mongo_password = url_encode(
         &std::env::var("MONGO_PASSWORD").expect("Could not get mongo password in environment"),
-    ).await;
+    )
+    .await;
     let mongo_address =
         std::env::var("MONGO_ADDR").expect("Could not get mongo address in environment");
     let mongo_database = std::env::var("MONGO_DB").expect("Could not get mongo db in environment");
@@ -83,8 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let discord_task = tokio::spawn(async move {
         let prefix = std::env::var("BOT_PREFIX").unwrap_or("`".into());
         let handler = Handler::new(prefix.chars().next().unwrap(), receiver, db_clone);
-        let framework = StandardFramework::new()
-            .configure(|c| c.prefix(prefix));
+        let framework = StandardFramework::new().configure(|c| c.prefix(prefix));
         let token =
             std::env::var("DISCORD_TOKEN").expect("Could not find Discord Token in environment");
         let intents = GatewayIntents::GUILD_MESSAGES |
@@ -134,7 +132,7 @@ async fn hook_discord(
     // is to work with already existing webhook services just with a custom URI
     Query(query): Query<HookQuery>,
     state: Extension<SendEmbed>,
-    db: Extension<Database>
+    db: Extension<Database>,
 ) -> StatusCode {
     // println!("{:?}", body);
     // println!("App ID: {}", app_id);
@@ -145,7 +143,8 @@ async fn hook_discord(
             doc! {"app_id": app_id, "approved": Bson::Boolean(true)},
             None,
         )
-        .await {
+        .await
+    {
         if let Some(coll) = found {
             if verify(&query.token, &coll.token).is_ok() {
                 let destination = Destination::new(

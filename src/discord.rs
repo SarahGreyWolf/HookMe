@@ -1,19 +1,19 @@
 use crate::body_type::{Destination, EmbedData};
-use crate::{UserCollection, AppCollection};
+use crate::{AppCollection, UserCollection};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use mongodb::{
     bson::oid::ObjectId,
     bson::{doc, Bson},
     Database,
 };
-use serenity::{async_trait, model::id::RoleId};
 use serenity::client::{Context, EventHandler};
 use serenity::model::{channel::Message, gateway::Ready, id::ChannelId};
+use serenity::{async_trait, model::id::RoleId};
 use serenity::{builder::CreateMessage, model::user::User, prelude::*};
 use std::sync::Arc;
-use tokio::sync::mpsc::{Receiver};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 use yyid::*;
-use bcrypt::{DEFAULT_COST, hash, verify};
 
 pub(crate) struct Handler {
     prefix: char,
@@ -30,7 +30,7 @@ impl Handler {
         Handler {
             prefix,
             incoming_embed: Arc::new(RwLock::new(receiver)),
-            db
+            db,
         }
     }
 }
@@ -150,7 +150,13 @@ impl EventHandler for Handler {
 }
 
 /// Request an app_id and token to use a webhook
-async fn request(prefix: &char, db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Message) {
+async fn request(
+    prefix: &char,
+    db: &Database,
+    parameters: Vec<&str>,
+    ctx: &Context,
+    msg: &Message,
+) {
     let user = &msg.author;
     let guild_id = &msg.guild_id.expect("Failed to get guild id");
     if !has_permission("GENERAL_ROLE_ID", &ctx, &msg, &user, guild_id.0).await {
@@ -173,7 +179,9 @@ async fn request(prefix: &char, db: &Database, parameters: Vec<&str>, ctx: &Cont
         insert_new_app(db, user, app_id, app, guild_id.0, channel).await;
         user.direct_message(&ctx.http, |m| {
             m.content(format!("Request Submitted for {}", app))
-        }).await.expect("Failed to tell user about submitted request");
+        })
+        .await
+        .expect("Failed to tell user about submitted request");
         let mut destination = msg.channel_id;
         if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
             if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
@@ -229,23 +237,41 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
         if app.approved == Bson::Boolean(true) {
             return;
         }
-        ctx.http.broadcast_typing(msg.channel_id.0).await.expect("Failed to start typing");
+        ctx.http
+            .broadcast_typing(msg.channel_id.0)
+            .await
+            .expect("Failed to start typing");
         let token = Yyid::new();
         let hashed_token = hash(token.as_bytes(), DEFAULT_COST).expect("FAILED TO HASH TOKEN");
-        ctx.http.broadcast_typing(msg.channel_id.0).await.expect("Failed to start typing");
+        ctx.http
+            .broadcast_typing(msg.channel_id.0)
+            .await
+            .expect("Failed to start typing");
         if verify(token.as_bytes(), &hashed_token).is_err() {
             panic!("Somehow hashed token was not verified for token");
         }
         let app_coll = db.collection::<AppCollection>("application");
         let token = token.to_string();
         let app_id_long = app_id.parse::<u32>().unwrap();
-        app_coll.update_one(doc!{"app_id": app_id_long}, doc!{"$set":{"token": hashed_token, "approved": Bson::Boolean(true)}}, None)
-            .await.expect("Failed to update app");
+        app_coll
+            .update_one(
+                doc! {"app_id": app_id_long},
+                doc! {"$set":{"token": hashed_token, "approved": Bson::Boolean(true)}},
+                None,
+            )
+            .await
+            .expect("Failed to update app");
         let address = std::env::var("HOOK_ADDRESS").unwrap_or("http://localhost".into());
         if let Ok(end_user) = &ctx.http.get_user(user.id).await {
-            end_user.direct_message(&ctx.http, |m| {
-                m.content(format!("The address for your apps webhook is {address}/{app_id}/discord?token={token}"))
-            }).await.expect("Failed to DM user");
+            end_user
+                .direct_message(&ctx.http, |m| {
+                    m.content(format!(
+                        "The address for your apps webhook is \
+                         {address}/{app_id}/discord?token={token}"
+                    ))
+                })
+                .await
+                .expect("Failed to DM user");
         } else {
             panic!("Failed to get owner for app {}", app_id);
         }
@@ -281,12 +307,7 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                 .expect("Failed to send message");
             return;
         };
-        if let Ok(found) = app_coll
-            .find_one(
-                doc! {"app_id": app_id},
-                None,
-            )
-            .await {
+        if let Ok(found) = app_coll.find_one(doc! {"app_id": app_id}, None).await {
             if let Some(_) = found {
                 if let Some((user, app)) = get_app_and_user(&db, app_id).await {
                     let app_name = app.app_name;
@@ -303,7 +324,8 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                                 .say(
                                     &ctx.http,
                                     format!(
-                                        "{username}s app {app_name}'s access token has been revoked",
+                                        "{username}s app {app_name}'s access token has been \
+                                         revoked",
                                     ),
                                 )
                                 .await
@@ -311,36 +333,41 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                         } else {
                             let username = user.username;
                             destination
-                            .say(
-                                &ctx.http,
-                                format!(
-                                    "{username}s app {app_name}'s request has been declined",
-                                ),
-                            )
-                            .await
-                            .expect("Failed to send message");
+                                .say(
+                                    &ctx.http,
+                                    format!(
+                                        "{username}s app {app_name}'s request has been declined",
+                                    ),
+                                )
+                                .await
+                                .expect("Failed to send message");
                         }
                         if let Ok(end_user) = &ctx.http.get_user(user.id).await {
                             if app.approved.as_bool().unwrap() {
-                                end_user.direct_message(&ctx.http, |m| {
-                                    m.content(format!("Your app {app_name}'s token has been revoked"))
-                                }).await.expect("Failed to DM user");
+                                end_user
+                                    .direct_message(&ctx.http, |m| {
+                                        m.content(format!(
+                                            "Your app {app_name}'s token has been revoked"
+                                        ))
+                                    })
+                                    .await
+                                    .expect("Failed to DM user");
                             } else {
-                                end_user.direct_message(&ctx.http, |m| {
-                                    m.content(format!("Your app {app_name}'s request has been denied"))
-                                }).await.expect("Failed to DM user");
+                                end_user
+                                    .direct_message(&ctx.http, |m| {
+                                        m.content(format!(
+                                            "Your app {app_name}'s request has been denied"
+                                        ))
+                                    })
+                                    .await
+                                    .expect("Failed to DM user");
                             }
                         } else {
                             panic!("Failed to get owner for app {}", app_id);
                         }
                     } else {
                         msg.channel_id
-                            .say(
-                                &ctx.http,
-                                format!(
-                                    "Failed to revoke/decline access",
-                                ),
-                            )
+                            .say(&ctx.http, format!("Failed to revoke/decline access",))
                             .await
                             .expect("Failed to send message");
                     }
@@ -352,19 +379,32 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
 
 async fn help(prefix: &char, ctx: &Context, msg: &Message) {
     let user = &msg.author;
-    let bot_user = &ctx.http.get_current_user().await
-                .expect("Failed to get bot user");
-    user.direct_message(&ctx.http, |m|{
-        m.add_embed(|e|{
+    let bot_user = &ctx.http.get_current_user().await.expect("Failed to get bot user");
+    user.direct_message(&ctx.http, |m| {
+        m.add_embed(|e| {
             e.title("Hook Me Commands:")
                 .author(|a| a.name(&bot_user.name).icon_url(&bot_user.avatar_url().unwrap()))
                 .fields(vec![
-                    (format!("{prefix}request <app name>"), "Request webhook access for an app", false),
-                    (format!("{prefix}approve <app id>"), "Approve the request for webhook access", false),
-                    (format!("{prefix}revoke <app id>"), "Revoke or Decline access", false)
+                    (
+                        format!("{prefix}request <app name>"),
+                        "Request webhook access for an app",
+                        false,
+                    ),
+                    (
+                        format!("{prefix}approve <app id>"),
+                        "Approve the request for webhook access",
+                        false,
+                    ),
+                    (
+                        format!("{prefix}revoke <app id>"),
+                        "Revoke or Decline access",
+                        false,
+                    ),
                 ])
         })
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
 }
 
 fn escape(input: &str) -> String {
@@ -374,7 +414,11 @@ fn escape(input: &str) -> String {
 async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, guild: u64) -> bool {
     if let Ok(role_id) = std::env::var(key) {
         if role_id != "" {
-            if !user.has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap())).await.unwrap_or(false) {
+            if !user
+                .has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap()))
+                .await
+                .unwrap_or(false)
+            {
                 msg.channel_id
                     .say(&ctx.http, "You do not have permission to use this command")
                     .await
@@ -389,9 +433,17 @@ async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, gu
 async fn get_app_and_user(db: &Database, app_id: u32) -> Option<(UserCollection, AppCollection)> {
     let app_coll = db.collection::<AppCollection>("application");
     let user_coll = db.collection::<UserCollection>("user");
-    if let Some(app) = app_coll.find_one(doc!{"app_id": app_id}, None).await.expect("Failed to find app") {
+    if let Some(app) = app_coll
+        .find_one(doc! {"app_id": app_id}, None)
+        .await
+        .expect("Failed to find app")
+    {
         let user_id = app.owner.id;
-        if let Some(user) = user_coll.find_one(doc!{"_id": user_id}, None).await.expect("Failed to find user") {
+        if let Some(user) = user_coll
+            .find_one(doc! {"_id": user_id}, None)
+            .await
+            .expect("Failed to find user")
+        {
             return Some((user, app));
         } else {
             eprintln!("Failed to find user");
@@ -403,7 +455,14 @@ async fn get_app_and_user(db: &Database, app_id: u32) -> Option<(UserCollection,
     }
 }
 
-async fn insert_new_app(db: &Database, user: &User, app_id: u32, app_name: &str, guild_id: u64, channel_id: u64) {
+async fn insert_new_app(
+    db: &Database,
+    user: &User,
+    app_id: u32,
+    app_name: &str,
+    guild_id: u64,
+    channel_id: u64,
+) {
     let username = &*user.name;
     let user_collection = UserCollection {
         _id: ObjectId::new(),
@@ -411,19 +470,25 @@ async fn insert_new_app(db: &Database, user: &User, app_id: u32, app_name: &str,
         username: username.into(),
     };
     let user_coll = db.collection::<UserCollection>("user");
-    let id = match user_coll.find_one(doc!{"id": user.id.0 as i64}, None).await {
+    let id = match user_coll.find_one(doc! {"id": user.id.0 as i64}, None).await {
         Ok(user) => {
             if let Some(user) = user {
                 user._id
             } else {
-                let id = user_coll.insert_one(user_collection, None).await.expect("Failed to write user to collection");
+                let id = user_coll
+                    .insert_one(user_collection, None)
+                    .await
+                    .expect("Failed to write user to collection");
                 id.inserted_id.as_object_id().unwrap()
             }
-        },
+        }
         Err(_) => {
-            let id = user_coll.insert_one(user_collection, None).await.expect("Failed to write user to collection");
+            let id = user_coll
+                .insert_one(user_collection, None)
+                .await
+                .expect("Failed to write user to collection");
             id.inserted_id.as_object_id().unwrap()
-        },
+        }
     };
     let app_collection = AppCollection {
         _id: ObjectId::new(),
@@ -439,5 +504,8 @@ async fn insert_new_app(db: &Database, user: &User, app_id: u32, app_name: &str,
         approved: Bson::Boolean(false),
     };
     let app_coll = db.collection::<AppCollection>("application");
-    app_coll.insert_one(app_collection, None).await.expect("Failed to write app to collection");
+    app_coll
+        .insert_one(app_collection, None)
+        .await
+        .expect("Failed to write app to collection");
 }

@@ -8,14 +8,13 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", default-features=false, features = ["rt-multi-thread", "sync", "macros"] }
 axum = "0.5.1"
 tower = "0.4.12"
 serenity = {version="0.11"}
 rand = "0.8.5"
 yyid = "0.6.0"
 bcrypt = "0.13.0"
-async-trait = "0.1.53"
 
 [dependencies.mongodb]
 version = "2.2.1"
