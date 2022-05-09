@@ -7,7 +7,6 @@ pub trait Embed {
     fn get_embeds(&self) -> Vec<EmbedData>;
 }
 
-#[derive(Debug, Clone)]
 pub struct Destination {
     pub(crate) username: String,
     pub(crate) avatar_url: String,
@@ -72,7 +71,7 @@ pub struct DiscordWebhook {
     wait: bool,
     content: String,
     username: String,
-    avatar_url: String,
+    _avatar_url: String,
     tts: bool,
     embeds: Vec<EmbedData>,
 }
@@ -83,7 +82,7 @@ impl Embed for DiscordWebhook {
     }
 
     fn get_avatar_url(&self) -> String {
-        self.avatar_url.clone()
+        self._avatar_url.clone()
     }
 
     fn get_first_embed(&self) -> EmbedData {

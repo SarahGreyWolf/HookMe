@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let db_clone = db.clone();
 
     // Run Discord Bot
-    let discord_task = tokio::spawn(async move {
+    tokio::spawn(async move {
         let prefix = std::env::var("BOT_PREFIX").unwrap_or("`".into());
         let handler = Handler::new(prefix.chars().next().unwrap(), receiver, db_clone);
         let framework = StandardFramework::new().configure(|c| c.prefix(prefix));
@@ -104,9 +104,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .layer(Extension(db))
             .into_inner(),
     );
-    let address = std::env::var("LOCAL_IP").expect("Could not find local ip in environment");
     let port = std::env::var("PORT").expect("Could not find port in environment");
-    let addr = SocketAddr::from((IpAddr::from_str(&address).unwrap(), port.parse().unwrap()));
+    let addr = SocketAddr::from((IpAddr::V4((0,0,0,0)), port.parse().unwrap()));
     println!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
