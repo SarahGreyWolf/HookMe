@@ -1,3 +1,5 @@
+#[deny(dead_code)]
+
 use serde::{Deserialize, Serialize};
 
 pub trait Embed {
@@ -7,9 +9,10 @@ pub trait Embed {
     fn get_embeds(&self) -> Vec<EmbedData>;
 }
 
+#[derive(Debug)]
 pub struct Destination {
     pub(crate) username: String,
-    pub(crate) avatar_url: String,
+    pub(crate) _avatar_url: String,
     pub(crate) server_id: u64,
     pub(crate) channel_id: u64,
     pub(crate) user_id: u64,
@@ -27,7 +30,7 @@ impl Destination {
     ) -> Destination {
         Destination {
             username: username.into(),
-            avatar_url: avatar_url.into(),
+            _avatar_url: avatar_url.into(),
             server_id,
             channel_id,
             user_id,

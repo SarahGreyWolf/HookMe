@@ -13,10 +13,9 @@ use serde::{Deserialize, Serialize};
 use serenity::framework::standard::StandardFramework;
 use serenity::prelude::*;
 use serenity::Client as DS_Client;
-use std::{error::Error, sync::Arc};
+use std::{error::Error, sync::Arc, net::Ipv4Addr};
 use std::{
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
+    net::{SocketAddr},
 };
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::RwLock;
@@ -105,7 +104,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .into_inner(),
     );
     let port = std::env::var("PORT").expect("Could not find port in environment");
-    let addr = SocketAddr::from((IpAddr::V4((0,0,0,0)), port.parse().unwrap()));
+    let addr = SocketAddr::from((Ipv4Addr::new(0,0,0,0), port.parse().unwrap()));
     println!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

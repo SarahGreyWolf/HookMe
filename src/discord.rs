@@ -96,9 +96,6 @@ impl EventHandler for Handler {
                 if let Ok(threadsdata) = &ctx.http.get_guild_active_threads(guild.0).await {
                     let threads = &threadsdata.threads;
                     for thread in threads {
-                        if thread.name() != format!("{} - {}", &dest.username, user.name) {
-                            continue;
-                        }
                         if let Ok(messages) = &mut ctx.http.get_messages(thread.id.0, "").await {
                             // Reverse the messages because they are listed from last to first
                             messages.reverse();
@@ -107,6 +104,9 @@ impl EventHandler for Handler {
                             messages.next().unwrap();
                             if let Some(id_message) = messages.next() {
                                 if id_message.content == format!("{:#}", &dest.app_id) {
+                                    if thread.name() != format!("{} - {}", escape(&dest.username), escape(&user.name)) {
+                                        continue;
+                                    }
                                     let mut message_clone = message.clone();
                                     thread
                                         .send_message(&ctx.http, |_m| &mut message_clone)
