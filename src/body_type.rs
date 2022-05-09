@@ -12,6 +12,7 @@ pub trait Embed {
 #[derive(Debug)]
 pub struct Destination {
     pub(crate) username: String,
+
     pub(crate) _avatar_url: String,
     pub(crate) server_id: u64,
     pub(crate) channel_id: u64,
@@ -74,6 +75,7 @@ pub struct DiscordWebhook {
     wait: bool,
     content: String,
     username: String,
+    #[serde(rename(deserialize="avatar_url"))]
     _avatar_url: String,
     tts: bool,
     embeds: Vec<EmbedData>,
