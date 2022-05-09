@@ -38,11 +38,11 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.is_private() {
+        if msg.is_private() || msg.is_own(&ctx) {
             return;
         }
         let content = &mut msg.content.chars();
-        if content.next().unwrap_or(' ') != self.prefix || msg.is_own(&ctx) {
+        if content.next().unwrap_or(' ') != self.prefix {
             return;
         }
         let content = content.collect::<String>();
@@ -408,7 +408,7 @@ async fn help(prefix: &char, ctx: &Context, msg: &Message) {
 }
 
 fn escape(input: &str) -> String {
-    input.replace("@", "\\@")
+    input.replace("@", "")
 }
 
 async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, guild: u64) -> bool {
