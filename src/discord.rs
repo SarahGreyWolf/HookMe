@@ -123,13 +123,13 @@ impl EventHandler for Handler {
                     if let Some(channel) = channels.get(&ChannelId(dest.channel_id)) {
                         let start_message = channel
                             .send_message(&ctx.http, |m| {
-                                m.content(format!("{} - {}", &dest.username, user.name))
+                                m.content(format!("{} - {}", escape(&dest.username), escape(&user.name)))
                             })
                             .await
                             .expect("Failed to create ID Message");
                         let thread = channel
                             .create_public_thread(&ctx.http, start_message.id, |thread| {
-                                thread.name(format!("{} - {}", &dest.username, user.name))
+                                thread.name(format!("{} - {}", escape(&dest.username), escape(&user.name)))
                             })
                             .await
                             .expect("Failed to create public thread");
@@ -261,7 +261,7 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
             )
             .await
             .expect("Failed to update app");
-        let address = std::env::var("HOOK_ADDRESS").unwrap_or("http://localhost".into());
+        let address = std::env::var("HOOK_ADDRESS").unwrap_or("http://0.0.0.0".into());
         if let Ok(end_user) = &ctx.http.get_user(user.id).await {
             end_user
                 .direct_message(&ctx.http, |m| {
