@@ -137,7 +137,7 @@ async fn hook_discord(
     let collection = db.collection::<AppCollection>("application");
     if let Ok(found) = collection
         .find_one(
-            doc! {"app_id": app_id, "approved": Bson::Boolean(true)},
+            doc! {"app_id": app_id, "app_name": &body.get_username(), "approved": Bson::Boolean(true)},
             None,
         )
         .await
