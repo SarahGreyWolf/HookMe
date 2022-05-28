@@ -1,5 +1,3 @@
-#[deny(dead_code)]
-
 use serde::{Deserialize, Serialize};
 
 pub trait Embed {
@@ -12,7 +10,6 @@ pub trait Embed {
 #[derive(Debug)]
 pub struct Destination {
     pub(crate) username: String,
-
     pub(crate) _avatar_url: String,
     pub(crate) server_id: u64,
     pub(crate) channel_id: u64,

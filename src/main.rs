@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Run Discord Bot
     tokio::spawn(async move {
-        let prefix = std::env::var("BOT_PREFIX").unwrap_or("`".into());
+        let prefix = std::env::var("BOT_PREFIX").unwrap_or_else(|_| "`".into() );
         let handler = Handler::new(prefix.chars().next().unwrap(), receiver, db_clone);
         let framework = StandardFramework::new().configure(|c| c.prefix(prefix));
         let token =
@@ -135,61 +135,59 @@ async fn hook_discord(
     // println!("App ID: {}", app_id);
     // println!("Token: {}", &query.token);
     let collection = db.collection::<AppCollection>("application");
-    if let Ok(found) = collection
+    if let Ok(Some(coll)) = collection
         .find_one(
             doc! {"app_id": app_id, "app_name": &body.get_username(), "approved": Bson::Boolean(true)},
             None,
         )
         .await
     {
-        if let Some(coll) = found {
-            if verify(&query.token, &coll.token).is_ok() {
-                let destination = Destination::new(
-                    &body.get_username(),
-                    &body.get_avatar_url(),
-                    coll.server_id,
-                    coll.channel_id,
-                    121691909688131587,
-                    coll.app_id,
-                );
-                let lock = state.write().await;
-                lock.send((destination, body.get_first_embed()))
-                    .await
-                    .expect("Failed to send embed");
-                drop(lock);
-                return StatusCode::ACCEPTED;
-            } else {
-                return StatusCode::UNAUTHORIZED;
-            }
+        if verify(&query.token, &coll.token).is_ok() {
+            let destination = Destination::new(
+                &body.get_username(),
+                &body.get_avatar_url(),
+                coll.server_id,
+                coll.channel_id,
+                121691909688131587,
+                coll.app_id,
+            );
+            let lock = state.write().await;
+            lock.send((destination, body.get_first_embed()))
+                .await
+                .expect("Failed to send embed");
+            drop(lock);
+            return StatusCode::ACCEPTED;
+        } else {
+            return StatusCode::UNAUTHORIZED;
         }
     }
-    return StatusCode::UNAUTHORIZED;
+    StatusCode::UNAUTHORIZED
 }
 
 async fn url_encode(input: &str) -> String {
     input
-        .replace("%", "%25")
-        .replace(" ", "%20")
-        .replace("\"", "%22")
-        .replace("#", "%23")
-        .replace("$", "%24")
-        .replace("+", "%2b")
-        .replace(",", "%2c")
-        .replace("/", "%2f")
-        .replace(":", "%3a")
-        .replace(";", "%3b")
-        .replace("<", "%3c")
-        .replace("=", "%3d")
-        .replace(">", "%3e")
-        .replace("?", "%3f")
-        .replace("@", "%40")
-        .replace("[", "%5b")
-        .replace("\\", "%5c")
-        .replace("]", "%5d")
-        .replace("^", "%5e")
-        .replace("`", "%60")
-        .replace("{", "%7b")
-        .replace("|", "%7c")
-        .replace("}", "%7d")
-        .replace("~", "%7e")
+        .replace('%', "%25")
+        .replace(' ', "%20")
+        .replace('"', "%22")
+        .replace('#', "%23")
+        .replace('$', "%24")
+        .replace('+', "%2b")
+        .replace(',', "%2c")
+        .replace('/', "%2f")
+        .replace(':', "%3a")
+        .replace(';', "%3b")
+        .replace('<', "%3c")
+        .replace('=', "%3d")
+        .replace('>', "%3e")
+        .replace('?', "%3f")
+        .replace('@', "%40")
+        .replace('[', "%5b")
+        .replace('\\', "%5c")
+        .replace(']', "%5d")
+        .replace('^', "%5e")
+        .replace('`', "%60")
+        .replace('{', "%7b")
+        .replace('|', "%7c")
+        .replace('}', "%7d")
+        .replace('~', "%7e")
 }

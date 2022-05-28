@@ -159,7 +159,7 @@ async fn request(
 ) {
     let user = &msg.author;
     let guild_id = &msg.guild_id.expect("Failed to get guild id");
-    if !has_permission("GENERAL_ROLE_ID", &ctx, &msg, &user, guild_id.0).await {
+    if !has_permission("GENERAL_ROLE_ID", ctx, msg, user, guild_id.0).await {
         return;
     }
     if parameters.len() != 1 {
@@ -213,7 +213,7 @@ async fn request(
 async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Message) {
     let user = &msg.author;
     let guild_id = &msg.guild_id.expect("Failed to get guild id");
-    if !has_permission("ADMIN_ROLE_ID", &ctx, &msg, &user, guild_id.0).await {
+    if !has_permission("ADMIN_ROLE_ID", ctx, msg, user, guild_id.0).await {
         return;
     }
     if parameters.len() != 1 {
@@ -261,7 +261,7 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
             )
             .await
             .expect("Failed to update app");
-        let address = std::env::var("HOOK_ADDRESS").unwrap_or("http://0.0.0.0".into());
+        let address = std::env::var("HOOK_ADDRESS").unwrap_or_else(|_|"http://0.0.0.0".into());
         if let Ok(end_user) = &ctx.http.get_user(user.id).await {
             end_user
                 .direct_message(&ctx.http, |m| {
@@ -286,7 +286,7 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
 async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Message) {
     let user = &msg.author;
     let guild_id = &msg.guild_id.expect("Failed to get guild id");
-    if !has_permission("ADMIN_ROLE_ID", &ctx, &msg, &user, guild_id.0).await {
+    if !has_permission("ADMIN_ROLE_ID", ctx, msg, user, guild_id.0).await {
         return;
     }
     if parameters.len() != 1 {
@@ -307,70 +307,68 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                 .expect("Failed to send message");
             return;
         };
-        if let Ok(found) = app_coll.find_one(doc! {"app_id": app_id}, None).await {
-            if let Some(_) = found {
-                if let Some((user, app)) = get_app_and_user(&db, app_id).await {
-                    let app_name = app.app_name;
-                    if app_coll.delete_one(doc! {"app_id": app_id}, None).await.is_ok() {
-                        let mut destination = msg.channel_id;
-                        if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
-                            if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
-                                destination = channel.id();
-                            }
+        if app_coll.find_one(doc! {"app_id": app_id}, None).await.is_ok() {
+            if let Some((user, app)) = get_app_and_user(db, app_id).await {
+                let app_name = app.app_name;
+                if app_coll.delete_one(doc! {"app_id": app_id}, None).await.is_ok() {
+                    let mut destination = msg.channel_id;
+                    if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
+                        if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
+                            destination = channel.id();
                         }
-                        if app.approved.as_bool().unwrap() {
-                            let username = user.username;
-                            destination
-                                .say(
-                                    &ctx.http,
-                                    format!(
-                                        "{username}s app {app_name}'s access token has been \
-                                         revoked",
-                                    ),
-                                )
-                                .await
-                                .expect("Failed to send message");
-                        } else {
-                            let username = user.username;
-                            destination
-                                .say(
-                                    &ctx.http,
-                                    format!(
-                                        "{username}s app {app_name}'s request has been declined",
-                                    ),
-                                )
-                                .await
-                                .expect("Failed to send message");
-                        }
-                        if let Ok(end_user) = &ctx.http.get_user(user.id).await {
-                            if app.approved.as_bool().unwrap() {
-                                end_user
-                                    .direct_message(&ctx.http, |m| {
-                                        m.content(format!(
-                                            "Your app {app_name}'s token has been revoked"
-                                        ))
-                                    })
-                                    .await
-                                    .expect("Failed to DM user");
-                            } else {
-                                end_user
-                                    .direct_message(&ctx.http, |m| {
-                                        m.content(format!(
-                                            "Your app {app_name}'s request has been denied"
-                                        ))
-                                    })
-                                    .await
-                                    .expect("Failed to DM user");
-                            }
-                        } else {
-                            panic!("Failed to get owner for app {}", app_id);
-                        }
+                    }
+                    if app.approved.as_bool().unwrap() {
+                        let username = user.username;
+                        destination
+                            .say(
+                                &ctx.http,
+                                format!(
+                                    "{username}s app {app_name}'s access token has been \
+                                        revoked",
+                                ),
+                            )
+                            .await
+                            .expect("Failed to send message");
                     } else {
-                        msg.channel_id
-                            .say(&ctx.http, format!("Failed to revoke/decline access",))
+                        let username = user.username;
+                        destination
+                            .say(
+                                &ctx.http,
+                                format!(
+                                    "{username}s app {app_name}'s request has been declined",
+                                ),
+                            )
                             .await
                             .expect("Failed to send message");
                     }
+                    if let Ok(end_user) = &ctx.http.get_user(user.id).await {
+                        if app.approved.as_bool().unwrap() {
+                            end_user
+                                .direct_message(&ctx.http, |m| {
+                                    m.content(format!(
+                                        "Your app {app_name}'s token has been revoked"
+                                    ))
+                                })
+                                .await
+                                .expect("Failed to DM user");
+                        } else {
+                            end_user
+                                .direct_message(&ctx.http, |m| {
+                                    m.content(format!(
+                                        "Your app {app_name}'s request has been denied"
+                                    ))
+                                })
+                                .await
+                                .expect("Failed to DM user");
+                        }
+                    } else {
+                        panic!("Failed to get owner for app {}", app_id);
+                    }
+                } else {
+                    msg.channel_id
+                        .say(&ctx.http, "Failed to revoke/decline access".to_string())
+                        .await
+                        .expect("Failed to send message");
                 }
             }
         }
@@ -408,23 +406,21 @@ async fn help(prefix: &char, ctx: &Context, msg: &Message) {
 }
 
 fn escape(input: &str) -> String {
-    input.replace("@", "")
+    input.replace('@', "")
 }
 
 async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, guild: u64) -> bool {
     if let Ok(role_id) = std::env::var(key) {
-        if role_id != "" {
-            if !user
-                .has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap()))
+        if !role_id.is_empty() && !user
+            .has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap()))
+            .await
+            .unwrap_or(false)
+        {
+            msg.channel_id
+                .say(&ctx.http, "You do not have permission to use this command")
                 .await
-                .unwrap_or(false)
-            {
-                msg.channel_id
-                    .say(&ctx.http, "You do not have permission to use this command")
-                    .await
-                    .expect("Failed to send message");
-                return false;
-            }
+                .expect("Failed to send message");
+            return false;
         }
     }
     true
@@ -449,10 +445,9 @@ async fn get_app_and_user(db: &Database, app_id: u32) -> Option<(UserCollection,
             eprintln!("Failed to find user");
             return None;
         }
-    } else {
-        eprintln!("Failed to find application");
-        return None;
     }
+    eprintln!("Failed to find application");
+    None
 }
 
 async fn insert_new_app(
@@ -500,7 +495,7 @@ async fn insert_new_app(
             id,
         },
         server_id: guild_id,
-        channel_id: channel_id,
+        channel_id,
         approved: Bson::Boolean(false),
     };
     let app_coll = db.collection::<AppCollection>("application");
