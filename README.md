@@ -4,6 +4,8 @@ A discord bot and web api to handle webhooks from servers like github and Gitea,
 
 ![Image of working bot funcionality](https://github.com/sarahgreywolf/HookMe/raw/main/assets/preview.png)
 
+## Environment Variables
+
 Var Name            | Type   | Usage
 --------------------|--------|--------
 DISCORD_TOKEN       | String | The token for your discord bot
