@@ -1,7 +1,12 @@
 [package]
 name = "hook_me"
+description = "A discord bot and web api to handle webhooks from servers like github and Gitea, with the ability to manage who has permission to use it."
 version = "1.0.0"
 edition = "2021"
+authors = ["SarahGreyWolf <m.sarahgreywolf@outlook.com>"]
+license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/SarahGreyWolf/HookMe"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
