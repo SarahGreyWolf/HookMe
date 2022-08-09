@@ -66,7 +66,11 @@ impl EventHandler for Handler {
                 if dest.server_id != guild.0 {
                     continue;
                 }
-                let user = &ctx.http.get_user(dest.user_id).await.expect("Failed to get user");
+                let user = &ctx
+                    .http
+                    .get_user(dest.user_id)
+                    .await
+                    .expect("Failed to get user");
                 let mut message = CreateMessage::default();
                 message.embed(|e| {
                     e.title(escape(&embed.title.clone()))
@@ -104,7 +108,13 @@ impl EventHandler for Handler {
                             messages.next().unwrap();
                             if let Some(id_message) = messages.next() {
                                 if id_message.content == format!("{:#}", &dest.app_id) {
-                                    if thread.name() != format!("{} - {}", escape(&dest.username), escape(&user.name)) {
+                                    if thread.name()
+                                        != format!(
+                                            "{} - {}",
+                                            escape(&dest.username),
+                                            escape(&user.name)
+                                        )
+                                    {
                                         continue;
                                     }
                                     let mut message_clone = message.clone();
@@ -123,13 +133,21 @@ impl EventHandler for Handler {
                     if let Some(channel) = channels.get(&ChannelId(dest.channel_id)) {
                         let start_message = channel
                             .send_message(&ctx.http, |m| {
-                                m.content(format!("{} - {}", escape(&dest.username), escape(&user.name)))
+                                m.content(format!(
+                                    "{} - {}",
+                                    escape(&dest.username),
+                                    escape(&user.name)
+                                ))
                             })
                             .await
                             .expect("Failed to create ID Message");
                         let thread = channel
                             .create_public_thread(&ctx.http, start_message.id, |thread| {
-                                thread.name(format!("{} - {}", escape(&dest.username), escape(&user.name)))
+                                thread.name(format!(
+                                    "{} - {}",
+                                    escape(&dest.username),
+                                    escape(&user.name)
+                                ))
                             })
                             .await
                             .expect("Failed to create public thread");
@@ -261,7 +279,7 @@ async fn approve(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Mess
             )
             .await
             .expect("Failed to update app");
-        let address = std::env::var("HOOK_ADDRESS").unwrap_or_else(|_|"http://0.0.0.0".into());
+        let address = std::env::var("HOOK_ADDRESS").unwrap_or_else(|_| "http://0.0.0.0".into());
         if let Ok(end_user) = &ctx.http.get_user(user.id).await {
             end_user
                 .direct_message(&ctx.http, |m| {
@@ -307,10 +325,18 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                 .expect("Failed to send message");
             return;
         };
-        if app_coll.find_one(doc! {"app_id": app_id}, None).await.is_ok() {
+        if app_coll
+            .find_one(doc! {"app_id": app_id}, None)
+            .await
+            .is_ok()
+        {
             if let Some((user, app)) = get_app_and_user(db, app_id).await {
                 let app_name = app.app_name;
-                if app_coll.delete_one(doc! {"app_id": app_id}, None).await.is_ok() {
+                if app_coll
+                    .delete_one(doc! {"app_id": app_id}, None)
+                    .await
+                    .is_ok()
+                {
                     let mut destination = msg.channel_id;
                     if let Ok(id) = std::env::var("APPROVAL_CHANNEL_ID") {
                         if let Ok(channel) = &ctx.http.get_channel(id.parse().unwrap()).await {
@@ -334,9 +360,7 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
                         destination
                             .say(
                                 &ctx.http,
-                                format!(
-                                    "{username}s app {app_name}'s request has been declined",
-                                ),
+                                format!("{username}s app {app_name}'s request has been declined",),
                             )
                             .await
                             .expect("Failed to send message");
@@ -377,11 +401,18 @@ async fn revoke(db: &Database, parameters: Vec<&str>, ctx: &Context, msg: &Messa
 
 async fn help(prefix: &char, ctx: &Context, msg: &Message) {
     let user = &msg.author;
-    let bot_user = &ctx.http.get_current_user().await.expect("Failed to get bot user");
+    let bot_user = &ctx
+        .http
+        .get_current_user()
+        .await
+        .expect("Failed to get bot user");
     user.direct_message(&ctx.http, |m| {
         m.add_embed(|e| {
             e.title("Hook Me Commands:")
-                .author(|a| a.name(&bot_user.name).icon_url(&bot_user.avatar_url().unwrap()))
+                .author(|a| {
+                    a.name(&bot_user.name)
+                        .icon_url(&bot_user.avatar_url().unwrap())
+                })
                 .fields(vec![
                     (
                         format!("{prefix}request <app name>"),
@@ -405,16 +436,15 @@ async fn help(prefix: &char, ctx: &Context, msg: &Message) {
     .unwrap();
 }
 
-fn escape(input: &str) -> String {
-    input.replace('@', "")
-}
+fn escape(input: &str) -> String { input.replace('@', "") }
 
 async fn has_permission(key: &str, ctx: &Context, msg: &Message, user: &User, guild: u64) -> bool {
     if let Ok(role_id) = std::env::var(key) {
-        if !role_id.is_empty() && !user
-            .has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap()))
-            .await
-            .unwrap_or(false)
+        if !role_id.is_empty()
+            && !user
+                .has_role(&ctx.http, guild, RoleId(role_id.parse().unwrap()))
+                .await
+                .unwrap_or(false)
         {
             msg.channel_id
                 .say(&ctx.http, "You do not have permission to use this command")
@@ -465,7 +495,10 @@ async fn insert_new_app(
         username: username.into(),
     };
     let user_coll = db.collection::<UserCollection>("user");
-    let id = match user_coll.find_one(doc! {"id": user.id.0 as i64}, None).await {
+    let id = match user_coll
+        .find_one(doc! {"id": user.id.0 as i64}, None)
+        .await
+    {
         Ok(user) => {
             if let Some(user) = user {
                 user._id

@@ -4,7 +4,7 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use bcrypt::{verify};
+use bcrypt::verify;
 use body_type::{Destination, Embed, EmbedData};
 use mongodb::{
     bson::doc, bson::oid::ObjectId, bson::Bson, options::ClientOptions, Client, Database,
@@ -13,10 +13,8 @@ use serde::{Deserialize, Serialize};
 use serenity::framework::standard::StandardFramework;
 use serenity::prelude::*;
 use serenity::Client as DS_Client;
-use std::{error::Error, sync::Arc, net::Ipv4Addr};
-use std::{
-    net::{SocketAddr},
-};
+use std::net::SocketAddr;
+use std::{error::Error, net::Ipv4Addr, sync::Arc};
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
@@ -73,19 +71,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let options = ClientOptions::parse(connection_string).await?;
 
     let client = Client::with_options(options)?;
-    let db = client.default_database().expect("Failed to get default database");
+    let db = client
+        .default_database()
+        .expect("Failed to get default database");
     let db_clone = db.clone();
 
     // Run Discord Bot
     tokio::spawn(async move {
-        let prefix = std::env::var("BOT_PREFIX").unwrap_or_else(|_| "`".into() );
+        let prefix = std::env::var("BOT_PREFIX").unwrap_or_else(|_| "`".into());
         let handler = Handler::new(prefix.chars().next().unwrap(), receiver, db_clone);
         let framework = StandardFramework::new().configure(|c| c.prefix(prefix));
         let token =
             std::env::var("DISCORD_TOKEN").expect("Could not find Discord Token in environment");
-        let intents = GatewayIntents::GUILD_MESSAGES |
-            GatewayIntents::DIRECT_MESSAGES |
-            GatewayIntents::MESSAGE_CONTENT;
+        let intents = GatewayIntents::GUILD_MESSAGES
+            | GatewayIntents::DIRECT_MESSAGES
+            | GatewayIntents::MESSAGE_CONTENT;
         let mut client = DS_Client::builder(token, intents)
             .event_handler(handler)
             .framework(framework)
@@ -97,14 +97,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let app = Router::new().route("/:app_id/discord", post(hook_discord)).layer(
-        ServiceBuilder::new()
-            .layer(Extension(Arc::new(RwLock::new(sender))))
-            .layer(Extension(db))
-            .into_inner(),
-    );
+    let app = Router::new()
+        .route("/:app_id/discord", post(hook_discord))
+        .layer(
+            ServiceBuilder::new()
+                .layer(Extension(Arc::new(RwLock::new(sender))))
+                .layer(Extension(db))
+                .into_inner(),
+        );
     let port = std::env::var("PORT").expect("Could not find port in environment");
-    let addr = SocketAddr::from((Ipv4Addr::new(0,0,0,0), port.parse().unwrap()));
+    let addr = SocketAddr::from((Ipv4Addr::new(0, 0, 0, 0), port.parse().unwrap()));
     println!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -142,23 +144,28 @@ async fn hook_discord(
         )
         .await
     {
-        if verify(&query.token, &coll.token).is_ok() {
-            let destination = Destination::new(
-                &body.get_username(),
-                &body.get_avatar_url(),
-                coll.server_id,
-                coll.channel_id,
-                121691909688131587,
-                coll.app_id,
-            );
-            let lock = state.write().await;
-            lock.send((destination, body.get_first_embed()))
-                .await
-                .expect("Failed to send embed");
-            drop(lock);
-            return StatusCode::ACCEPTED;
-        } else {
-            return StatusCode::UNAUTHORIZED;
+        let collection = db.collection::<UserCollection>("user");
+        match collection.find_one(doc!{"_id": coll.owner.id}, None).await {
+            Ok(Some(user_col)) => {
+                if verify(&query.token, &coll.token).is_ok() {
+                    let destination = Destination::new(
+                        &body.get_username(),
+                        &body.get_avatar_url(),
+                        coll.server_id,
+                        coll.channel_id,
+                        user_col.id,
+                        coll.app_id,
+                    );
+                    let lock = state.write().await;
+                    lock.send((destination, body.get_first_embed()))
+                        .await
+                        .expect("Failed to send embed");
+                    drop(lock);
+                    return StatusCode::ACCEPTED;
+                }
+            },
+            Ok(None) => eprintln!("No user found"),
+            Err(e) => eprintln!("Error Occured: {}", e),
         }
     }
     StatusCode::UNAUTHORIZED

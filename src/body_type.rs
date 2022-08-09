@@ -72,26 +72,18 @@ pub struct DiscordWebhook {
     wait: bool,
     content: String,
     username: String,
-    #[serde(rename(deserialize="avatar_url"))]
+    #[serde(rename(deserialize = "avatar_url"))]
     _avatar_url: String,
     tts: bool,
     embeds: Vec<EmbedData>,
 }
 
 impl Embed for DiscordWebhook {
-    fn get_username(&self) -> String {
-        self.username.clone()
-    }
+    fn get_username(&self) -> String { self.username.clone() }
 
-    fn get_avatar_url(&self) -> String {
-        self._avatar_url.clone()
-    }
+    fn get_avatar_url(&self) -> String { self._avatar_url.clone() }
 
-    fn get_first_embed(&self) -> EmbedData {
-        self.embeds[0].clone()
-    }
+    fn get_first_embed(&self) -> EmbedData { self.embeds[0].clone() }
 
-    fn get_embeds(&self) -> Vec<EmbedData> {
-        self.embeds.clone()
-    }
+    fn get_embeds(&self) -> Vec<EmbedData> { self.embeds.clone() }
 }
