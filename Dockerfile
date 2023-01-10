@@ -5,19 +5,18 @@ RUN apt-get update \
         --no-install-recommends \
         git
 
-RUN git clone https://gitea.sarahgreywolf.tech/SarahGreyWolf/HookMe.git /tmp/hookme
+RUN git clone https://gitea.sarahgreywolf.dev/SarahGreyWolf/HookMe.git /tmp/hookme
 RUN cd /tmp/hookme \
     && cargo build --release
 
 RUN mkdir /hookme \
-    && cp /tmp/hookme/target/release/hook_me /hookme/hookme
+    && cp /tmp/hookme/target/release/hook_me /hookme/hook_me
 
-FROM rust:slim AS run
+FROM debian:bullseye-slim AS run
 
 LABEL maintainer="SarahGreyWolf <m.sarahgreywolf@outlook.com>"
 LABEL description="Docker image for building and running HookMe"
 
-COPY --from=build /hookme /hookme
+COPY --from=build /hookme .
 
-WORKDIR /hookme
-ENTRYPOINT ["hook_me"]
+ENTRYPOINT ["./hook_me"]
