@@ -14,4 +14,5 @@ steps:
 - name: build
   image: jonoh/sccache-rust
   commands:
+  - sccache -s
   - cargo build
