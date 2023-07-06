@@ -11,3 +11,6 @@ steps:
   image: jonoh/sccache-rust
   commands:
   - cargo build
+  environment:
+    SCCACHE_WEBDAV_ENDPOINT: "http://192.168.0.14:9999"
+    SCCACHE_WEBDAV_KEY_PREFIX: "/cache"
