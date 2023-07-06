@@ -5,6 +5,7 @@ name: default
 environment:
   SCCACHE_WEBDAV_ENDPOINT: "http://192.168.0.14:9999"
   SCCACHE_WEBDAV_KEY_PREFIX: "/cache"
+  RUSTC_WRAPPER: "/user/local/bin/sccache"
 
 platform:
   os: linux
